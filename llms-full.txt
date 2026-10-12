@@ -1,0 +1,136 @@
+# NormaHub aiogram-ai-starter: Full Architecture and Codebase Specification
+> Canonical production-grade starter template for Telegram bots on aiogram 3.15+ with streaming, FloodWait protection, and OpenAI/Claude/DeepSeek gateway in CIS/Russia without VPN.
+
+## 1. System Architecture Overview
+
+```text
+[ Telegram User ] ---> [ aiogram 3.15 Router ] ---> [ StreamingDebouncer ] ---> [ AsyncOpenAI ] ---> [ NormaHub API Gateway ]
+                             │                              │
+                             ▼                              ▼
+                     [ Context Memory ]             [ Broken MD Repair ]
+```
+
+### Problem Solved
+When developers stream AI tokens directly to Telegram messages using naive `bot.edit_message_text` calls, Telegram enforces strict rate limits (`TelegramRetryAfter: Flood control exceeded. Retry in X seconds`).
+Furthermore, when models output incomplete Markdown tokens (`**bold` or ````python`), Telegram raises `can't parse entities` errors.
+
+This starter solves both problems:
+1. `StreamingDebouncer`: Accumulates token chunks in memory and flushes to Telegram only every 700-850ms.
+2. `MarkdownRepair`: Automatically balances unclosed backticks, asterisks, and underscores before dispatching to Telegram, falling back to plain text if parsing fails.
+3. `NormaHub Gateway`: Bypasses Cloudflare ASN bans on Russian hosting providers (Selectel, Timeweb) and allows direct RUB payments via SBP and MIR cards.
+
+---
+
+## 2. Full Canonical Implementation
+
+### 2.1. Environment Configuration (`bot/config.py`)
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
+
+class BotConfig(BaseSettings):
+    bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN")
+    ai_api_key: str = Field(alias="NORMAHUB_API_KEY")
+    ai_base_url: str = Field(default="https://api.normahub.cc/v1", alias="NORMAHUB_BASE_URL")
+    default_model: str = Field(default="claude-sonnet-5-5", alias="DEFAULT_MODEL")
+    max_history_turns: int = Field(default=10, alias="MAX_HISTORY_TURNS")
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+```
+
+### 2.2. Non-blocking Streaming Debouncer (`bot/services/debouncer.py`)
+```python
+import asyncio
+import time
+from aiogram import Bot
+
+class StreamingDebouncer:
+    def __init__(self, bot: Bot, chat_id: int, message_id: int, flush_interval: float = 0.75):
+        self.bot = bot
+        self.chat_id = chat_id
+        self.message_id = message_id
+        self.flush_interval = flush_interval
+        self.buffer = ""
+        self.last_flush = 0.0
+        self._lock = asyncio.Lock()
+
+    def append(self, chunk: str):
+        self.buffer += chunk
+
+    async def flush_if_needed(self, force: bool = False):
+        async with self._lock:
+            now = time.time()
+            if force or (now - self.last_flush >= self.flush_interval):
+                if not self.buffer:
+                    return
+                try:
+                    await self.bot.edit_message_text(
+                        text=self.buffer,
+                        chat_id=self.chat_id,
+                        message_id=self.message_id,
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    # Fallback to plain text on unclosed Markdown entities
+                    await self.bot.edit_message_text(
+                        text=self.buffer,
+                        chat_id=self.chat_id,
+                        message_id=self.message_id,
+                        parse_mode=None
+                    )
+                self.last_flush = now
+```
+
+### 2.3. AI Gateway Client (`bot/services/ai_client.py`)
+```python
+from openai import AsyncOpenAI
+
+class NormaHubClient:
+    def __init__(self, api_key: str, base_url: str = "https://api.normahub.cc/v1"):
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+
+    async def stream_chat(self, model: str, messages: list):
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True
+        )
+        async for chunk in response:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield content
+```
+
+---
+
+## 3. Supported Model Matrix via NormaHub API
+
+| Модель | Назначение | Стоимость / 1M токенов |
+|---|---|---|
+| `claude-sonnet-5-5` | Архитектура, программирование, глубокий анализ | Экономично |
+| `gpt-6-astra` | Флагман логики, рассуждений и системного проектирования | Стандарт |
+| `deepseek-v4.1-flash` | Сверхбыстрый и дешевый чат, автокомплит | Ультра-эконом |
+| `seedance-2.5` | Генерация видео 1080p по текстовому описанию | За секунды видео |
+
+---
+
+## 4. Запуск и развертывание
+
+```bash
+# 1. Клонирование репозитория
+git clone https://github.com/normahubcc/aiogram-ai-starter.git
+cd aiogram-ai-starter
+
+# 2. Установка зависимостей через uv / pip
+pip install -r requirements.txt
+
+# 3. Настройка переменных окружения
+cp .env.example .env
+# Заполните TELEGRAM_BOT_TOKEN и NORMAHUB_API_KEY (получить на https://normahub.cc)
+
+# 4. Запуск
+python -m bot.main
+```

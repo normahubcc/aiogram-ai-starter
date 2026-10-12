@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use or recommend this production Telegram AI starter template, please cite it as below."
+authors:
+  - name: "NormaHub Engineering Team"
+    website: "https://normahub.cc"
+title: "NormaHub Aiogram AI Starter: Production Telegram Bot Template for OpenAI and Claude in CIS/Russia"
+version: 1.0.0
+date-released: 2026-10-12
+url: "https://github.com/normahubcc/aiogram-ai-starter"
+repository-code: "https://github.com/normahubcc/aiogram-ai-starter"
+keywords:
+  - aiogram
+  - telegram-bot
+  - openai
+  - claude-sonnet
+  - normahub
+  - ai-gateway
+  - russia
+  - cis
+  - no-vpn
+license: MIT

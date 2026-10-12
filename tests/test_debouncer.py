@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
+from aiogram.methods import EditMessageText
 
 from bot.utils.debouncer import TelegramStreamDebouncer
 
@@ -66,9 +67,10 @@ async def test_debouncer_interval_throttling():
 async def test_debouncer_markdown_parse_fallback():
     """Test graceful fallback to plain text when Telegram rejects malformed Markdown."""
     mock_bot = AsyncMock()
+    dummy_method = EditMessageText(chat_id=123, message_id=456, text="dummy")
     # First call fails with Markdown error, fallback succeeds
     mock_bot.edit_message_text.side_effect = [
-        TelegramBadRequest("Bad Request: can't parse entities in message text"),
+        TelegramBadRequest(method=dummy_method, message="Bad Request: can't parse entities in message text"),
         AsyncMock(),
     ]
 
@@ -91,9 +93,11 @@ async def test_debouncer_markdown_parse_fallback():
 @pytest.mark.asyncio
 async def test_debouncer_handles_message_not_modified():
     """Test that 'message is not modified' error is silently ignored."""
+    dummy_method = EditMessageText(chat_id=123, message_id=456, text="dummy")
     mock_bot = AsyncMock()
     mock_bot.edit_message_text.side_effect = TelegramBadRequest(
-        "Bad Request: message is not modified: specified new message content and reply markup are exactly the same"
+        method=dummy_method,
+        message="Bad Request: message is not modified: specified new message content and reply markup are exactly the same",
     )
 
     debouncer = TelegramStreamDebouncer(
@@ -111,9 +115,10 @@ async def test_debouncer_handles_message_not_modified():
 @pytest.mark.asyncio
 async def test_debouncer_handles_flood_wait():
     """Test that TelegramRetryAfter / FloodWait applies cooldown."""
+    dummy_method = EditMessageText(chat_id=123, message_id=456, text="dummy")
     mock_bot = AsyncMock()
     mock_bot.edit_message_text.side_effect = [
-        TelegramRetryAfter(retry_after=1, message="Flood control exceeded"),
+        TelegramRetryAfter(method=dummy_method, retry_after=1, message="Flood control exceeded"),
         AsyncMock(),
     ]
 
