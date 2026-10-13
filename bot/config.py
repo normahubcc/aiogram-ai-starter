@@ -66,10 +66,15 @@ class BotConfig(BaseSettings):
     )
 
     # Storage & Infrastructure
+    database_path: str = Field(
+        default="data/bot_database.db",
+        description="Path to SQLite persistent database file (WAL mode)",
+    )
     redis_url: str | None = Field(
         default=None,
         description="Optional Redis connection URL for FSM and state persistence (e.g. redis://redis:6379/0)",
     )
+
 
     # Administration & Observability
     admin_user_ids: list[int] = Field(

@@ -43,17 +43,21 @@ def get_quick_actions_keyboard() -> InlineKeyboardMarkup:
     """Generate quick action buttons beneath welcome and help messages."""
     builder = InlineKeyboardBuilder()
     builder.button(text="⚙️ Сменить модель", callback_data="open_models")
+    builder.button(text="⭐ Купить запросы (Stars)", callback_data="open_shop")
+    builder.button(text="🎁 Реферальная программа", callback_data="open_ref")
     builder.button(text="💳 Баланс API", callback_data="check_balance")
     builder.button(text="🧹 Очистить память", callback_data="clear_context")
     builder.button(text="🌐 Личный кабинет", url="https://normahub.cc/dashboard")
-    builder.adjust(2, 1, 1)
+    builder.adjust(2, 2, 1, 1)
     return builder.as_markup()
 
 
 def get_balance_keyboard() -> InlineKeyboardMarkup:
     """Generate balance overview action buttons."""
     builder = InlineKeyboardBuilder()
+    builder.button(text="⭐ Пополнить через Telegram Stars", callback_data="open_shop")
     builder.button(text="💳 Пополнить баланс (СБП/РФ)", url="https://normahub.cc/dashboard")
     builder.button(text="📋 Каталог моделей", url="https://normahub.cc/models")
     builder.adjust(1)
     return builder.as_markup()
+

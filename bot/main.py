@@ -46,7 +46,12 @@ async def main() -> None:
         except Exception as e:
             logger.warning("Could not connect to Redis (%s), falling back to MemoryStorage", e)
 
-    # 2. Clients and managers
+    # 2. Database & Managers
+    from bot.database.db import DatabaseManager
+
+    db = DatabaseManager(db_path=config.database_path)
+    await db.init_db()
+
     normahub_client = NormaHubClient(
         api_key=config.normahub_api_key.get_secret_value(),
         base_url=config.normahub_base_url,
@@ -83,7 +88,9 @@ async def main() -> None:
         "config": config,
         "normahub_client": normahub_client,
         "context_manager": context_manager,
+        "db": db,
     }
+
 
     try:
         bot_user = await bot.get_me()
