@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = Router(name="voice_router")
 
 
-@router.message(F.voice)
+@router.message(F.voice | F.video_note)
 async def handle_voice_message(
     message: Message,
     bot: Bot,
@@ -24,19 +24,28 @@ async def handle_voice_message(
     normahub_client: NormaHubClient,
     context_manager: ConversationManager,
 ) -> None:
-    """Download voice note, transcribe with Whisper-1, and stream LLM answer."""
-    if not message.voice:
+    """Download voice note or circular video note, transcribe with Whisper-1, and stream LLM answer."""
+    file_id = message.voice.file_id if message.voice else (message.video_note.file_id if message.video_note else None)
+    if not file_id:
         return
 
+    is_video_note = bool(message.video_note)
+    filename = "video_note.mp4" if is_video_note else "voice.ogg"
+    status_icon = "📹" if is_video_note else "🎧"
+    status_type = "видео-кружочек" if is_video_note else "голосовое"
+
     user_id = message.from_user.id if message.from_user else 0
-    status_msg = await message.answer("🎧 *Слушаю и расшифровываю голосовое...*")
-    await bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.RECORD_VOICE)
+    status_msg = await message.answer(f"{status_icon} *Слушаю и расшифровываю {status_type}...*")
+    await bot.send_chat_action(
+        chat_id=message.chat.id,
+        action=ChatAction.RECORD_VIDEO_NOTE if is_video_note else ChatAction.RECORD_VOICE,
+    )
 
     try:
-        # 1. Download voice file bytes
-        file_info = await bot.get_file(message.voice.file_id)
+        # 1. Download audio/video file bytes
+        file_info = await bot.get_file(file_id)
         if not file_info.file_path:
-            await status_msg.edit_text("❌ Не удалось получить путь к голосовому файлу.")
+            await status_msg.edit_text(f"❌ Не удалось получить путь к файлу ({status_type}).")
             return
 
         audio_buffer = io.BytesIO()
@@ -46,12 +55,12 @@ async def handle_voice_message(
         # 2. Transcribe using NormaHub Whisper endpoint
         transcribed_text = await normahub_client.transcribe_audio(
             audio_bytes=audio_bytes,
-            filename="voice.ogg",
+            filename=filename,
             model="whisper-1",
         )
 
         if not transcribed_text or not transcribed_text.strip():
-            await status_msg.edit_text("🔇 Не удалось распознать речь в голосовом сообщении. Попробуйте еще раз.")
+            await status_msg.edit_text(f"🔇 Не удалось распознать речь в сообщении ({status_type}). Попробуйте еще раз.")
             return
 
         # 3. Inform user of recognized text
